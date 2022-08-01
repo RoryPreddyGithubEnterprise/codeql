@@ -77,7 +77,7 @@ class ExecState extends DataFlow::FlowState {
   ExecState() {
     this =
       "ExecState (" + fst.getLocation() + " | " + fst + ", " + snd.getLocation() + " | " + snd + ")" and
-    interestingConcatenation(fst, snd)
+    interestingConcatenation(pragma[only_bind_into](fst), pragma[only_bind_into](snd))
   }
 
   DataFlow::Node getFstNode() { result = fst }
@@ -116,8 +116,8 @@ class ExecTaintConfiguration extends TaintTracking::Configuration {
     state instanceof ConcatState
   }
 
-  override predicate isSanitizerOut(DataFlow::Node node, DataFlow::FlowState state) {
-    isSink(node, state) // Prevent duplicates along a call chain, since `shellCommand` will include wrappers
+  override predicate isSanitizerOut(DataFlow::Node node) {
+    isSink(node, _) // Prevent duplicates along a call chain, since `shellCommand` will include wrappers
   }
 }
 

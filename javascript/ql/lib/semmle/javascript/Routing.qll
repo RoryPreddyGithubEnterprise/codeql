@@ -88,7 +88,7 @@ module Routing {
      * The location spans column `startcolumn` of line `startline` to
      * column `endcolumn` of line `endline` in file `filepath`.
      * For more information, see
-     * [Locations](https://help.semmle.com/QL/learn-ql/ql/locations.html).
+     * [Locations](https://codeql.github.com/docs/writing-codeql-queries/providing-locations-in-codeql-queries).
      */
     predicate hasLocationInfo(
       string filepath, int startline, int startcolumn, int endline, int endcolumn
@@ -144,6 +144,18 @@ module Routing {
       // Leaf nodes that aren't functions are assumed to invoke their continuation
       not exists(this.getLastChild()) and
       not this instanceof RouteHandler
+      or
+      this instanceof MkRouter
+    }
+
+    /**
+     * Like `mayResumeDispatch` but without the assumption that functions with an unknown
+     * implementation invoke their continuation.
+     */
+    predicate definitelyResumesDispatch() {
+      this.getLastChild().definitelyResumesDispatch()
+      or
+      exists(this.(RouteHandler).getAContinuationInvocation())
       or
       this instanceof MkRouter
     }
@@ -229,7 +241,7 @@ module Routing {
     }
 
     /**
-     * Holds if `node` has processed the incoming request strictly prior to this node.
+     * Holds if `guard` has processed the incoming request strictly prior to this node.
      */
     pragma[inline]
     private predicate isGuardedByNodeInternal(Node guard) {

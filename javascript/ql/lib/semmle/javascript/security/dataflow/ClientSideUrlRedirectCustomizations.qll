@@ -5,7 +5,6 @@
  */
 
 import javascript
-import semmle.javascript.security.dataflow.RemoteFlowSources
 
 module ClientSideUrlRedirect {
   /**
@@ -105,6 +104,10 @@ module ClientSideUrlRedirect {
       |
         name = ["replace", "assign"]
       ) and
+      xss = true
+      or
+      // A call to `navigation.navigate`
+      this = DataFlow::globalVarRef("navigation").getAMethodCall("navigate").getArgument(0) and
       xss = true
       or
       // An assignment to `location`

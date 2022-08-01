@@ -353,7 +353,7 @@ abstract class BarrierGuardNode extends DataFlow::Node {
 }
 
 /**
- * Holds if data flow node `nd` acts as a barrier for data flow.
+ * Holds if data flow node `guard` acts as a barrier for data flow.
  *
  * `label` is bound to the blocked label, or the empty string if all labels should be blocked.
  */
@@ -382,7 +382,7 @@ private predicate barrierGuardIsRelevant(BarrierGuardNode guard) {
 }
 
 /**
- * Holds if data flow node `nd` acts as a barrier for data flow due to aliasing through
+ * Holds if data flow node `guard` acts as a barrier for data flow due to aliasing through
  * an access path.
  *
  * `label` is bound to the blocked label, or the empty string if all labels should be blocked.
@@ -1155,7 +1155,7 @@ private predicate appendStep(
 }
 
 /**
- * Holds if a function invoked at `invk` may return an expression into which `input`,
+ * Holds if a function invoked at `output` may return an expression into which `input`,
  * which is either an argument or a definition captured by the function, flows under
  * configuration `cfg`, possibly through callees.
  */
@@ -1395,7 +1395,7 @@ private predicate reachableFromStoreBase(
 }
 
 /**
- * Holds if `base` is the base of a write to property `prop`, and `nd` is reachable
+ * Holds if `base` is the base of a write to property `endProp`, and `nd` is reachable
  * from `base` under configuration `cfg` (possibly through callees) along a path whose
  * last step is summarized by `newSummary`, and the previous steps are summarized
  * by `oldSummary`.
@@ -1758,7 +1758,7 @@ class PathNode extends TPathNode {
     this = MkSinkNode(nd, cfg)
   }
 
-  /** Holds if this path node wraps data-flow node `nd` and configuration `c`. */
+  /** Holds if this path node wraps data-flow node `n` and configuration `c`. */
   predicate wraps(DataFlow::Node n, DataFlow::Configuration c) { nd = n and cfg = c }
 
   /** Gets the underlying configuration of this path node. */
@@ -1873,7 +1873,7 @@ class MidPathNode extends PathNode, MkMidNode {
 
   MidPathNode() { this = MkMidNode(nd, cfg, summary) }
 
-  /** Holds if this path node wraps data-flow node `nd`, configuration `c` and summary `s`. */
+  /** Holds if this path node wraps data-flow node `n`, configuration `c` and summary `s`. */
   predicate wraps(DataFlow::Node n, DataFlow::Configuration c, PathSummary s) {
     nd = n and cfg = c and summary = s
   }
@@ -1977,20 +1977,26 @@ module PathGraph {
 }
 
 /**
- * Gets an operand of the given `&&` operator.
- *
- * We use this to construct the transitive closure over a relation
- * that does not include all of `BinaryExpr.getAnOperand`.
+ * Gets a logical `and` expression, or parenthesized expression, that contains `guard`.
  */
-private Expr getALogicalAndOperand(LogAndExpr e) { result = e.getAnOperand() }
+private Expr getALogicalAndParent(BarrierGuardNode guard) {
+  barrierGuardIsRelevant(guard) and result = guard.asExpr()
+  or
+  result.(LogAndExpr).getAnOperand() = getALogicalAndParent(guard)
+  or
+  result.getUnderlyingValue() = getALogicalAndParent(guard)
+}
 
 /**
- * Gets an operand of the given `||` operator.
- *
- * We use this to construct the transitive closure over a relation
- * that does not include all of `BinaryExpr.getAnOperand`.
+ * Gets a logical `or` expression, or parenthesized expression, that contains `guard`.
  */
-private Expr getALogicalOrOperand(LogOrExpr e) { result = e.getAnOperand() }
+private Expr getALogicalOrParent(BarrierGuardNode guard) {
+  barrierGuardIsRelevant(guard) and result = guard.asExpr()
+  or
+  result.(LogOrExpr).getAnOperand() = getALogicalOrParent(guard)
+  or
+  result.getUnderlyingValue() = getALogicalOrParent(guard)
+}
 
 /**
  * A `BarrierGuardNode` that controls which data flow
@@ -2020,10 +2026,10 @@ private class BarrierGuardFunction extends Function {
         returnExpr = guard.asExpr()
         or
         // ad hoc support for conjunctions:
-        getALogicalAndOperand+(returnExpr) = guard.asExpr() and guardOutcome = true
+        getALogicalAndParent(guard) = returnExpr and guardOutcome = true
         or
         // ad hoc support for disjunctions:
-        getALogicalOrOperand+(returnExpr) = guard.asExpr() and guardOutcome = false
+        getALogicalOrParent(guard) = returnExpr and guardOutcome = false
       |
         exists(SsaExplicitDefinition ssa |
           ssa.getDef().getSource() = returnExpr and

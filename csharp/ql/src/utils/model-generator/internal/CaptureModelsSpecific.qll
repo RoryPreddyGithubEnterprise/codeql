@@ -3,9 +3,12 @@
  */
 
 private import csharp as CS
+private import dotnet
 private import semmle.code.csharp.commons.Util as Util
 private import semmle.code.csharp.commons.Collections as Collections
 private import semmle.code.csharp.dataflow.internal.DataFlowDispatch
+private import semmle.code.csharp.frameworks.System as System
+private import semmle.code.csharp.frameworks.system.linq.Expressions
 import semmle.code.csharp.dataflow.ExternalFlow as ExternalFlow
 import semmle.code.csharp.dataflow.internal.DataFlowImplCommon as DataFlowImplCommon
 import semmle.code.csharp.dataflow.internal.DataFlowPrivate as DataFlowPrivate
@@ -17,11 +20,23 @@ module TaintTracking = CS::TaintTracking;
 class Type = CS::Type;
 
 /**
+ * Holds if any of the parameters of `api` are `System.Func<>`.
+ */
+private predicate isHigherOrder(CS::Callable api) {
+  exists(Type t | t = api.getAParameter().getType().getUnboundDeclaration() |
+    t instanceof SystemLinqExpressions::DelegateExtType
+  )
+}
+
+/**
  * Holds if it is relevant to generate models for `api`.
  */
 private predicate isRelevantForModels(CS::Callable api) {
   [api.(CS::Modifiable), api.(CS::Accessor).getDeclaration()].isEffectivelyPublic() and
-  not api instanceof Util::MainMethod
+  api.getDeclaringType().getNamespace().getQualifiedName() != "" and
+  not api instanceof CS::ConversionOperator and
+  not api instanceof Util::MainMethod and
+  not isHigherOrder(api)
 }
 
 /**
@@ -30,9 +45,10 @@ private predicate isRelevantForModels(CS::Callable api) {
  * In the Standard library and 3rd party libraries it the callables that can be called
  * from outside the library itself.
  */
-class TargetApiSpecific extends DataFlowCallable {
+class TargetApiSpecific extends DotNet::Callable {
   TargetApiSpecific() {
     this.fromSource() and
+    this.isUnboundDeclaration() and
     isRelevantForModels(this)
   }
 }
@@ -42,8 +58,13 @@ predicate asPartialModel = DataFlowPrivate::Csv::asPartialModel/1;
 /**
  * Holds for type `t` for fields that are relevant as an intermediate
  * read or write step in the data flow analysis.
+ * That is, flow through any data-flow node that does not have a relevant type
+ * will be excluded.
  */
-predicate isRelevantType(CS::Type t) { not t instanceof CS::Enum }
+predicate isRelevantType(CS::Type t) {
+  not t instanceof CS::SimpleType and
+  not t instanceof CS::Enum
+}
 
 /**
  * Gets the CSV string representation of the qualifier.
@@ -91,7 +112,7 @@ string returnNodeAsOutput(DataFlowImplCommon::ReturnNodeExt node) {
  * Gets the enclosing callable of `ret`.
  */
 CS::Callable returnNodeEnclosingCallable(DataFlowImplCommon::ReturnNodeExt ret) {
-  result = DataFlowImplCommon::getNodeEnclosingCallable(ret)
+  result = DataFlowImplCommon::getNodeEnclosingCallable(ret).getUnderlyingCallable()
 }
 
 /**

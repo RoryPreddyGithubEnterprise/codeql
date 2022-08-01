@@ -268,7 +268,7 @@ module HTTP {
         string getUrlPattern() {
           exists(CfgNodes::ExprNodes::StringlikeLiteralCfgNode strNode |
             this.getUrlPatternArg().getALocalSource() = DataFlow::exprNode(strNode) and
-            result = strNode.getExpr().getConstantValue().getStringOrSymbol()
+            result = strNode.getExpr().getConstantValue().getStringlikeValue()
           )
         }
 
@@ -431,7 +431,7 @@ module HTTP {
         string getMimetype() {
           exists(CfgNodes::ExprNodes::StringlikeLiteralCfgNode strNode |
             this.getMimetypeOrContentTypeArg().getALocalSource() = DataFlow::exprNode(strNode) and
-            result = strNode.getExpr().getConstantValue().getStringOrSymbol().splitAt(";", 0)
+            result = strNode.getExpr().getConstantValue().getStringlikeValue().splitAt(";", 0)
           )
           or
           not exists(this.getMimetypeOrContentTypeArg()) and
@@ -815,4 +815,57 @@ module Logging {
     /** Gets an input that is logged. */
     abstract DataFlow::Node getAnInput();
   }
+}
+
+/**
+ * Provides models for cryptographic concepts.
+ *
+ * Note: The `CryptographicAlgorithm` class currently doesn't take weak keys into
+ * consideration for the `isWeak` member predicate. So RSA is always considered
+ * secure, although using a low number of bits will actually make it insecure. We plan
+ * to improve our libraries in the future to more precisely capture this aspect.
+ */
+module Cryptography {
+  // Since we still rely on `isWeak` predicate on `CryptographicOperation` in Ruby, we
+  // modify that part of the shared concept... which means we have to explicitly
+  // re-export everything else.
+  // Using SC shorthand for "Shared Cryptography"
+  import codeql.ruby.internal.ConceptsShared::Cryptography as SC
+
+  class CryptographicAlgorithm = SC::CryptographicAlgorithm;
+
+  class EncryptionAlgorithm = SC::EncryptionAlgorithm;
+
+  class HashingAlgorithm = SC::HashingAlgorithm;
+
+  class PasswordHashingAlgorithm = SC::PasswordHashingAlgorithm;
+
+  /**
+   * A data-flow node that is an application of a cryptographic algorithm. For example,
+   * encryption, decryption, signature-validation.
+   *
+   * Extend this class to refine existing API models. If you want to model new APIs,
+   * extend `CryptographicOperation::Range` instead.
+   */
+  class CryptographicOperation extends SC::CryptographicOperation instanceof CryptographicOperation::Range {
+    /** DEPRECATED: Use `getAlgorithm().isWeak() or getBlockMode().isWeak()` instead */
+    deprecated predicate isWeak() { super.isWeak() }
+  }
+
+  /** Provides classes for modeling new applications of a cryptographic algorithms. */
+  module CryptographicOperation {
+    /**
+     * A data-flow node that is an application of a cryptographic algorithm. For example,
+     * encryption, decryption, signature-validation.
+     *
+     * Extend this class to model new APIs. If you want to refine existing API models,
+     * extend `CryptographicOperation` instead.
+     */
+    abstract class Range extends SC::CryptographicOperation::Range {
+      /** DEPRECATED: Use `getAlgorithm().isWeak() or getBlockMode().isWeak()` instead */
+      deprecated predicate isWeak() { this.getAlgorithm().isWeak() or this.getBlockMode().isWeak() }
+    }
+  }
+
+  class BlockMode = SC::BlockMode;
 }

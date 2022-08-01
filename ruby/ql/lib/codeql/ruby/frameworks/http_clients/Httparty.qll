@@ -28,7 +28,7 @@ class HttpartyRequest extends HTTP::Client::Request::Range {
   DataFlow::CallNode requestUse;
 
   HttpartyRequest() {
-    requestUse = requestNode.getAnImmediateUse() and
+    requestUse = requestNode.asSource() and
     requestNode =
       API::getTopLevelMember("HTTParty")
           .getReturn(["get", "head", "delete", "options", "post", "put", "patch"]) and
@@ -79,7 +79,7 @@ class HttpartyRequest extends HTTP::Client::Request::Range {
 /** Holds if `node` represents the symbol literal `verify` or `verify_peer`. */
 private predicate isVerifyLiteral(DataFlow::Node node) {
   exists(DataFlow::LocalSourceNode literal |
-    literal.asExpr().getExpr().getConstantValue().isStringOrSymbol(["verify", "verify_peer"]) and
+    literal.asExpr().getExpr().getConstantValue().isStringlikeValue(["verify", "verify_peer"]) and
     literal.flowsTo(node)
   )
 }

@@ -36,7 +36,7 @@ private import ExprNodes
  * constant value in some cases.
  */
 private module Propagation {
-  private ExprCfgNode getSource(VariableReadAccessCfgNode read) {
+  ExprCfgNode getSource(VariableReadAccessCfgNode read) {
     exists(Ssa::WriteDefinition def |
       def.assigns(result) and
       read = def.getARead()
@@ -229,9 +229,16 @@ private module Propagation {
     }
 
     pragma[nomagic]
-    string getNonSymbolValue() {
+    string getStringValue() {
       result = this.getValue() and
-      not this.getExpr() instanceof SymbolLiteral
+      not this.getExpr() instanceof SymbolLiteral and
+      not this.getExpr() instanceof RegExpLiteral
+    }
+
+    pragma[nomagic]
+    string getRegExpValue(string flags) {
+      result = this.getValue() and
+      flags = this.getExpr().(RegExpLiteral).getFlagString()
     }
   }
 
@@ -251,7 +258,7 @@ private module Propagation {
       s = left + right
     )
     or
-    s = e.(StringlikeLiteralWithInterpolationCfgNode).getNonSymbolValue()
+    s = e.(StringlikeLiteralWithInterpolationCfgNode).getStringValue()
     or
     // If last statement in the interpolation is a constant or local variable read,
     // we attempt to look up its string value.
@@ -267,13 +274,15 @@ private module Propagation {
     exists(ExprCfgNode last | last = e.(RegExpInterpolationComponentCfgNode).getLastStmt() |
       isInt(last, any(int i | s = i.toString())) or
       isFloat(last, any(float f | s = f.toString())) or
-      isString(last, s)
+      isString(last, s) or
+      isRegExp(last, s, _) // Note: we lose the flags for interpolated regexps here.
     )
   }
 
   private predicate isStringExprNoCfg(Expr e, string s) {
     s = e.(StringlikeLiteralImpl).getStringValue() and
-    not e instanceof SymbolLiteral
+    not e instanceof SymbolLiteral and
+    not e instanceof RegExpLiteral
     or
     s = e.(EncodingLiteralImpl).getValue()
     or
@@ -317,6 +326,31 @@ private module Propagation {
     isSymbolExpr(e.(ConstantReadAccess).getValue(), s)
     or
     forex(ExprCfgNode n | n = e.getAControlFlowNode() | isSymbol(n, s))
+  }
+
+  predicate isRegExp(ExprCfgNode e, string s, string flags) {
+    isRegExpExprNoCfg(e.getExpr(), s, flags)
+    or
+    isRegExpExpr(e.getExpr().(ConstantReadAccess).getValue(), s, flags)
+    or
+    isRegExp(getSource(e), s, flags)
+    or
+    s = e.(StringlikeLiteralWithInterpolationCfgNode).getRegExpValue(flags)
+  }
+
+  private predicate isRegExpExprNoCfg(Expr e, string s, string flags) {
+    s = e.(StringlikeLiteralImpl).getStringValue() and
+    e.(RegExpLiteral).getFlagString() = flags
+    or
+    isRegExpExprNoCfg(e.(ConstantReadAccess).getValue(), s, flags)
+  }
+
+  predicate isRegExpExpr(Expr e, string s, string flags) {
+    isRegExpExprNoCfg(e, s, flags)
+    or
+    isRegExpExpr(e.(ConstantReadAccess).getValue(), s, flags)
+    or
+    forex(ExprCfgNode n | n = e.getAControlFlowNode() | isRegExp(n, s, flags))
   }
 
   predicate isBoolean(ExprCfgNode e, boolean b) {
@@ -370,7 +404,7 @@ cached
 private module Cached {
   cached
   newtype TConstantValue =
-    TInt(int i) { isInt(_, i) or isIntExpr(_, i) } or
+    TInt(int i) { isInt(_, i) or isIntExpr(_, i) or i in [0 .. 100] } or
     TFloat(float f) { isFloat(_, f) or isFloatExpr(_, f) } or
     TRational(int numerator, int denominator) {
       isRational(_, numerator, denominator) or
@@ -388,8 +422,17 @@ private module Cached {
       s = any(StringComponentImpl c).getValue()
     } or
     TSymbol(string s) { isString(_, s) or isSymbolExpr(_, s) } or
+    TRegExp(string s, string flags) {
+      isRegExp(_, s, flags)
+      or
+      isRegExpExpr(_, s, flags)
+      or
+      s = any(StringComponentImpl c).getValue() and flags = ""
+    } or
     TBoolean(boolean b) { b in [false, true] } or
     TNil()
+
+  class TStringlike = TString or TSymbol or TRegExp;
 
   cached
   ConstantValue getConstantValue(ExprCfgNode n) {
@@ -410,6 +453,8 @@ private module Cached {
     result.isString(any(string s | isString(n, s)))
     or
     result.isSymbol(any(string s | isSymbol(n, s)))
+    or
+    exists(string s, string flags | isRegExp(n, s, flags) and result = TRegExp(s, flags))
     or
     result.isBoolean(any(boolean b | isBoolean(n, b)))
     or
@@ -437,6 +482,8 @@ private module Cached {
     or
     result.isSymbol(any(string s | isSymbolExpr(e, s)))
     or
+    exists(string s, string flags | isRegExpExpr(e, s, flags) and result = TRegExp(s, flags))
+    or
     result.isBoolean(any(boolean b | isBooleanExpr(e, b)))
     or
     result.isNil() and
@@ -462,3 +509,53 @@ private module Cached {
 }
 
 import Cached
+
+/**
+ * Holds if the control flow node `e` refers to an array constructed from the
+ * array literal `arr`.
+ * Example:
+ * ```rb
+ * [1, 2, 3]
+ * C = [1, 2, 3]; C
+ * x = [1, 2, 3]; x
+ * ```
+ */
+predicate isArrayConstant(ExprCfgNode e, ArrayLiteralCfgNode arr) {
+  // [...]
+  e = arr
+  or
+  // e = [...]; e
+  isArrayConstant(getSource(e), arr)
+  or
+  isArrayExpr(e.getExpr(), arr)
+}
+
+/**
+ * Holds if the expression `e` refers to an array constructed from the array literal `arr`.
+ */
+private predicate isArrayExpr(Expr e, ArrayLiteralCfgNode arr) {
+  // e = [...]
+  e = arr.getExpr()
+  or
+  // Like above, but handles the desugaring of array literals to Array.[] calls.
+  e.getDesugared() = arr.getExpr()
+  or
+  // A = [...]; A
+  // A = a; A
+  isArrayExpr(e.(ConstantReadAccess).getValue(), arr)
+  or
+  // Recurse via CFG nodes. Necessary for example in:
+  // a = [...]
+  // A = a
+  // A
+  //
+  // We map from A to a via ConstantReadAccess::getValue, yielding the Expr a.
+  // To get to [...] we need to go via getSource(ExprCfgNode e), so we find a
+  // CFG node for a and call `isArrayConstant`.
+  //
+  // The use of `forex` is intended to ensure that a is an array constant in all
+  // control flow paths.
+  // Note(hmac): I don't think this is necessary, as `getSource` will not return
+  // results if the source is a phi node.
+  forex(ExprCfgNode n | n = e.getAControlFlowNode() | isArrayConstant(n, arr))
+}
