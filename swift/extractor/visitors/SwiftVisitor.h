@@ -11,12 +11,14 @@ namespace codeql {
 
 class SwiftVisitor : private SwiftDispatcher {
  public:
+  using SwiftDispatcher::getEncounteredModules;
   using SwiftDispatcher::SwiftDispatcher;
 
   template <typename T>
   void extract(const T& entity) {
     fetchLabel(entity);
   }
+  void extract(swift::Token& comment) { emitComment(comment); }
 
  private:
   void visit(swift::Decl* decl) override { declVisitor.visit(decl); }

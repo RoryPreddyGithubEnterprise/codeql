@@ -3,6 +3,7 @@
 #include <swift/AST/SourceFile.h>
 #include <swift/Basic/SourceManager.h>
 #include <llvm/Support/FileSystem.h>
+#include <swift/Parse/Token.h>
 
 #include "swift/extractor/trap/TrapLabelStore.h"
 #include "swift/extractor/trap/TrapDomain.h"
@@ -52,6 +53,10 @@ class SwiftDispatcher {
       // we make sure the file is in the trap output even if the source is empty
       fetchLabel(getFilePath(currentPrimarySourceFile->getFilename()));
     }
+  }
+
+  const std::unordered_set<swift::ModuleDecl*> getEncounteredModules() && {
+    return std::move(encounteredModules);
   }
 
   template <typename Entry>
@@ -227,8 +232,16 @@ class SwiftDispatcher {
   //  - extracting a primary source file: in this mode, we extract several files belonging to the
   //    same module one by one. In this mode, we restrict emission only to the same file ignoring
   //    all the other files.
+  // This is also used to register the modules we encounter.
+  // TODO calls to this function should be taken away from `DeclVisitor` and moved around with a
+  // clearer separation between naming entities (some decls, all types), deciding whether to emit
+  // them and finally visiting emitting the contents of the entity (which should remain in the
+  // visitors). Then this double responsibility (carrying out the test and registering encountered
+  // modules) should also be cleared out
   bool shouldEmitDeclBody(const swift::Decl& decl) {
-    if (decl.getModuleContext() != &currentModule) {
+    auto module = decl.getModuleContext();
+    if (module != &currentModule) {
+      encounteredModules.insert(module);
       return false;
     }
     // ModuleDecl is a special case: if it passed the previous test, it is the current module
@@ -242,6 +255,12 @@ class SwiftDispatcher {
     return false;
   }
 
+  void emitComment(swift::Token& comment) {
+    CommentsTrap entry{trap.createLabel<CommentTag>(), comment.getRawText().str()};
+    trap.emit(entry);
+    attachLocation(comment.getRange().getStart(), comment.getRange().getEnd(), entry.id);
+  }
+
  private:
   void attachLocation(swift::SourceLoc start,
                       swift::SourceLoc end,
@@ -251,13 +270,13 @@ class SwiftDispatcher {
       return;
     }
     auto file = getFilePath(sourceManager.getDisplayNameForLoc(start));
-    Location entry{{}};
+    DbLocation entry{{}};
     entry.file = fetchLabel(file);
     std::tie(entry.start_line, entry.start_column) = sourceManager.getLineAndColumnInBuffer(start);
     std::tie(entry.end_line, entry.end_column) = sourceManager.getLineAndColumnInBuffer(end);
-    entry.id = trap.createLabel<LocationTag>('{', entry.file, "}:", entry.start_line, ':',
-                                             entry.start_column, ':', entry.end_line, ':',
-                                             entry.end_column);
+    entry.id = trap.createLabel<DbLocationTag>('{', entry.file, "}:", entry.start_line, ':',
+                                               entry.start_column, ':', entry.end_line, ':',
+                                               entry.end_column);
     emit(entry);
     emit(LocatableLocationsTrap{locatableLabel, entry.id});
   }
@@ -326,6 +345,7 @@ class SwiftDispatcher {
   Store::Handle waitingForNewLabel{std::monostate{}};
   swift::ModuleDecl& currentModule;
   swift::SourceFile* currentPrimarySourceFile;
+  std::unordered_set<swift::ModuleDecl*> encounteredModules;
 };
 
 }  // namespace codeql

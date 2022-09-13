@@ -65,7 +65,12 @@ class DataFlowCallable extends TDataFlowCallable {
   string toString() { result = [this.asCallable().toString(), this.asLibraryCallable()] }
 
   /** Gets the location of this callable. */
-  Location getLocation() { result = this.asCallable().getLocation() }
+  Location getLocation() {
+    result = this.asCallable().getLocation()
+    or
+    this instanceof TLibraryCallable and
+    result instanceof EmptyLocation
+  }
 }
 
 /**
@@ -420,10 +425,6 @@ private DataFlow::LocalSourceNode trackSingletonMethod(MethodBase m, string name
   name = m.getName()
 }
 
-private SsaSelfDefinitionNode selfInModule(Module tp) {
-  tp = result.getSelfScope().(ModuleBase).getModule()
-}
-
 private DataFlow::LocalSourceNode trackModule(Module tp, TypeTracker t) {
   t.start() and
   (
@@ -431,7 +432,13 @@ private DataFlow::LocalSourceNode trackModule(Module tp, TypeTracker t) {
     resolveConstantReadAccess(result.asExpr().getExpr()) = tp
     or
     // `self` reference to Module
-    result = selfInModule(tp)
+    exists(Scope scope | scope = result.(SsaSelfDefinitionNode).getSelfScope() |
+      tp = scope.(ModuleBase).getModule() and
+      not scope instanceof Toplevel // handled in `trackInstance`
+      or
+      scope = result.(SsaSelfDefinitionNode).getSelfScope() and
+      tp = scope.(SingletonMethod).getEnclosingModule().getModule()
+    )
   )
   or
   exists(TypeTracker t2, StepSummary summary |
@@ -560,6 +567,12 @@ class ArgumentPosition extends TArgumentPosition {
   }
 }
 
+pragma[nomagic]
+private predicate parameterPositionIsNotSelf(ParameterPosition ppos) { not ppos.isSelf() }
+
+pragma[nomagic]
+private predicate argumentPositionIsNotSelf(ArgumentPosition apos) { not apos.isSelf() }
+
 /** Holds if arguments at position `apos` match parameters at position `ppos`. */
 pragma[nomagic]
 predicate parameterMatch(ParameterPosition ppos, ArgumentPosition apos) {
@@ -577,9 +590,9 @@ predicate parameterMatch(ParameterPosition ppos, ArgumentPosition apos) {
   or
   ppos.isHashSplat() and apos.isHashSplat()
   or
-  ppos.isAny() and not apos.isSelf()
+  ppos.isAny() and argumentPositionIsNotSelf(apos)
   or
-  apos.isAny() and not ppos.isSelf()
+  apos.isAny() and parameterPositionIsNotSelf(ppos)
   or
   ppos.isAnyNamed() and apos.isKeyword(_)
   or

@@ -50,6 +50,8 @@ end
 
 sink(Foo.namedArg(foo: tainted)) # $ hasTaintFlow=tainted
 sink(Foo.namedArg(tainted))
+args = { foo: source("tainted") }
+sink(Foo.namedArg(**args)) # $ hasTaintFlow=tainted
 
 sink(Foo.anyArg(foo: tainted)) # $ hasTaintFlow=tainted
 sink(Foo.anyArg(tainted)) # $ hasTaintFlow=tainted
@@ -113,3 +115,6 @@ Foo.sinkAnyArg(key: tainted) # $ hasValueFlow=tainted
 
 Foo.sinkAnyNamedArg(tainted)
 Foo.sinkAnyNamedArg(key: tainted) # $ hasValueFlow=tainted
+
+"magic_string".method(tainted) # $ hasValueFlow=tainted
+"magic_string2".method(tainted)
