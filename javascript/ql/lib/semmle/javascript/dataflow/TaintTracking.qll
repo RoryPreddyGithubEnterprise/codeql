@@ -712,12 +712,30 @@ module TaintTracking {
   }
 
   /**
+   * Gets a local source of any part of the input to the given stringification `call`.
+   */
+  pragma[nomagic]
+  private DataFlow::Node getAJsonLocalInput(JsonStringifyCall call) {
+    result = call.getInput()
+    or
+    exists(DataFlow::SourceNode source |
+      source = pragma[only_bind_out](getAJsonLocalInput(call)).getALocalSource()
+    |
+      result = source.getAPropertyWrite().getRhs()
+      or
+      result = source.(DataFlow::ObjectLiteralNode).getASpreadProperty()
+      or
+      result = source.(DataFlow::ArrayCreationNode).getASpreadArgument()
+    )
+  }
+
+  /**
    * A taint propagating data flow edge arising from JSON unparsing.
    */
   private class JsonStringifyTaintStep extends SharedTaintStep {
     override predicate serializeStep(DataFlow::Node pred, DataFlow::Node succ) {
       exists(JsonStringifyCall call |
-        pred = call.getArgument(0) and
+        pred = getAJsonLocalInput(call) and
         succ = call
       )
     }
@@ -984,7 +1002,7 @@ module TaintTracking {
    *
    * `<contains>` is one of: `contains`, `has`, `hasOwnProperty`
    *
-   * Note that the `includes` method is covered by `StringInclusionSanitizer`.
+   * Note that the `includes` method is covered by `MembershipTestSanitizer`.
    */
   class WhitelistContainmentCallSanitizer extends AdditionalSanitizerGuardNode,
     DataFlow::MethodCallNode {
@@ -1171,7 +1189,7 @@ module TaintTracking {
   /**
    * A check of form `x.indexOf(y) > 0` or similar, which sanitizes `y` in the "then" branch.
    *
-   * The more typical case of `x.indexOf(y) >= 0` is covered by `StringInclusionSanitizer`.
+   * The more typical case of `x.indexOf(y) >= 0` is covered by `MembershipTestSanitizer`.
    */
   class PositiveIndexOfSanitizer extends AdditionalSanitizerGuardNode, DataFlow::ValueNode {
     MethodCallExpr indexOf;

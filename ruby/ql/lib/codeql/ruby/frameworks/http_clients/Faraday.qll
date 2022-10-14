@@ -2,7 +2,7 @@
  * Provides modeling for the `Faraday` library.
  */
 
-private import ruby
+private import codeql.ruby.AST
 private import codeql.ruby.CFG
 private import codeql.ruby.Concepts
 private import codeql.ruby.ApiGraphs
@@ -23,7 +23,7 @@ private import codeql.ruby.dataflow.internal.DataFlowImplForHttpClientLibraries 
  * connection.get("/").body
  * ```
  */
-class FaradayHttpRequest extends HTTP::Client::Request::Range, DataFlow::CallNode {
+class FaradayHttpRequest extends Http::Client::Request::Range, DataFlow::CallNode {
   API::Node requestNode;
   API::Node connectionNode;
   DataFlow::Node connectionUse;
@@ -37,7 +37,8 @@ class FaradayHttpRequest extends HTTP::Client::Request::Range, DataFlow::CallNod
         API::getTopLevelMember("Faraday").getInstance()
       ] and
     requestNode =
-      connectionNode.getReturn(["get", "head", "delete", "post", "put", "patch", "trace"]) and
+      connectionNode
+          .getReturn(["get", "head", "delete", "post", "put", "patch", "trace", "run_request"]) and
     this = requestNode.asSource() and
     connectionUse = connectionNode.asSource()
   }
@@ -71,6 +72,7 @@ class FaradayHttpRequest extends HTTP::Client::Request::Range, DataFlow::CallNod
     )
   }
 
+  cached
   override predicate disablesCertificateValidation(
     DataFlow::Node disablingNode, DataFlow::Node argumentOrigin
   ) {

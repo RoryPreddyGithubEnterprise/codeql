@@ -75,7 +75,7 @@ import java
 private import semmle.code.java.dataflow.DataFlow::DataFlow
 private import internal.DataFlowPrivate
 private import internal.FlowSummaryImpl::Private::External
-private import internal.FlowSummaryImplSpecific
+private import internal.FlowSummaryImplSpecific as FlowSummaryImplSpecific
 private import internal.AccessPathSyntax
 private import FlowSummary
 
@@ -117,6 +117,7 @@ private module Frameworks {
   private import semmle.code.java.frameworks.Retrofit
   private import semmle.code.java.frameworks.Stream
   private import semmle.code.java.frameworks.Strings
+  private import semmle.code.java.frameworks.Thymeleaf
   private import semmle.code.java.frameworks.ratpack.Ratpack
   private import semmle.code.java.frameworks.ratpack.RatpackExec
   private import semmle.code.java.frameworks.spring.SpringCache
@@ -141,6 +142,7 @@ private module Frameworks {
   private import semmle.code.java.security.LdapInjection
   private import semmle.code.java.security.MvelInjection
   private import semmle.code.java.security.OgnlInjection
+  private import semmle.code.java.security.TemplateInjection
   private import semmle.code.java.security.XPath
   private import semmle.code.java.security.XsltInjection
   private import semmle.code.java.frameworks.Jdbc
@@ -359,19 +361,7 @@ private class SummaryModelCsvBase extends SummaryModelCsv {
         "java.net;URI;false;toURL;;;Argument[-1];ReturnValue;taint;manual",
         "java.net;URI;false;toString;;;Argument[-1];ReturnValue;taint;manual",
         "java.net;URI;false;toAsciiString;;;Argument[-1];ReturnValue;taint;manual",
-        "java.io;File;true;toURI;;;Argument[-1];ReturnValue;taint;manual",
-        "java.io;File;true;toPath;;;Argument[-1];ReturnValue;taint;manual",
-        "java.io;File;true;getAbsoluteFile;;;Argument[-1];ReturnValue;taint;manual",
-        "java.io;File;true;getCanonicalFile;;;Argument[-1];ReturnValue;taint;manual",
-        "java.io;File;true;getAbsolutePath;;;Argument[-1];ReturnValue;taint;manual",
-        "java.io;File;true;getCanonicalPath;;;Argument[-1];ReturnValue;taint;manual",
         "java.nio;ByteBuffer;false;array;();;Argument[-1];ReturnValue;taint;manual",
-        "java.nio.file;Path;true;normalize;;;Argument[-1];ReturnValue;taint;manual",
-        "java.nio.file;Path;true;resolve;;;Argument[-1..0];ReturnValue;taint;manual",
-        "java.nio.file;Path;false;toFile;;;Argument[-1];ReturnValue;taint;manual",
-        "java.nio.file;Path;true;toString;;;Argument[-1];ReturnValue;taint;manual",
-        "java.nio.file;Path;true;toUri;;;Argument[-1];ReturnValue;taint;manual",
-        "java.nio.file;Paths;true;get;;;Argument[0..1];ReturnValue;taint;manual",
         "java.io;BufferedReader;true;readLine;;;Argument[-1];ReturnValue;taint;manual",
         "java.io;Reader;true;read;();;Argument[-1];ReturnValue;taint;manual",
         // arg to return
@@ -398,8 +388,6 @@ private class SummaryModelCsvBase extends SummaryModelCsv {
         // arg to arg
         "java.lang;System;false;arraycopy;;;Argument[0];Argument[2];taint;manual",
         // constructor flow
-        "java.io;File;false;File;;;Argument[0];Argument[-1];taint;manual",
-        "java.io;File;false;File;;;Argument[1];Argument[-1];taint;manual",
         "java.net;URI;false;URI;(String);;Argument[0];Argument[-1];taint;manual",
         "java.net;URL;false;URL;(String);;Argument[0];Argument[-1];taint;manual",
         "javax.xml.transform.stream;StreamSource;false;StreamSource;;;Argument[0];Argument[-1];taint;manual",
@@ -625,7 +613,7 @@ module CsvValidation {
           "open-url", "jndi-injection", "ldap", "sql", "jdbc-url", "logging", "mvel", "xpath",
           "groovy", "xss", "ognl-injection", "intent-start", "pending-intent-sent",
           "url-open-stream", "url-redirect", "create-file", "write-file", "set-hostname-verifier",
-          "header-splitting", "information-leak", "xslt", "jexl", "bean-validation"
+          "header-splitting", "information-leak", "xslt", "jexl", "bean-validation", "ssti"
         ] and
       not kind.matches("regex-use%") and
       not kind.matches("qltest%") and
@@ -846,7 +834,7 @@ private module Cached {
    */
   cached
   predicate sourceNode(Node node, string kind) {
-    exists(InterpretNode n | isSourceNode(n, kind) and n.asNode() = node)
+    exists(FlowSummaryImplSpecific::InterpretNode n | isSourceNode(n, kind) and n.asNode() = node)
   }
 
   /**
@@ -855,7 +843,7 @@ private module Cached {
    */
   cached
   predicate sinkNode(Node node, string kind) {
-    exists(InterpretNode n | isSinkNode(n, kind) and n.asNode() = node)
+    exists(FlowSummaryImplSpecific::InterpretNode n | isSinkNode(n, kind) and n.asNode() = node)
   }
 }
 

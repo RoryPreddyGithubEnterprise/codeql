@@ -222,7 +222,7 @@ class HtmlEscaping extends Escaping {
 }
 
 /** Provides classes for modeling HTTP-related APIs. */
-module HTTP {
+module Http {
   /** Provides classes for modeling HTTP servers. */
   module Server {
     /**
@@ -290,6 +290,26 @@ module HTTP {
       }
     }
 
+    /** A kind of request input. */
+    class RequestInputKind extends string {
+      RequestInputKind() { this = ["parameter", "header", "body", "url", "cookie"] }
+    }
+
+    /** Input from the parameters of a request. */
+    RequestInputKind parameterInputKind() { result = "parameter" }
+
+    /** Input from the headers of a request. */
+    RequestInputKind headerInputKind() { result = "header" }
+
+    /** Input from the body of a request. */
+    RequestInputKind bodyInputKind() { result = "body" }
+
+    /** Input from the URL of a request. */
+    RequestInputKind urlInputKind() { result = "url" }
+
+    /** Input from the cookies of a request. */
+    RequestInputKind cookieInputKind() { result = "cookie" }
+
     /**
      * An access to a user-controlled HTTP request input. For example, the URL or body of a request.
      * Instances of this class automatically become `RemoteFlowSource`s.
@@ -304,6 +324,32 @@ module HTTP {
        * This is typically the name of the method that gives rise to this input.
        */
       string getSourceType() { result = super.getSourceType() }
+
+      /**
+       * Gets the kind of the accessed input,
+       * Can be one of "parameter", "header", "body", "url", "cookie".
+       */
+      RequestInputKind getKind() { result = super.getKind() }
+
+      /**
+       * Holds if this part of the request may be controlled by a third party,
+       * that is, an agent other than the one who sent the request.
+       *
+       * This is true for the URL, query parameters, and request body.
+       * These can be controlled by a malicious third party in the following scenarios:
+       *
+       * - The user clicks a malicious link or is otherwise redirected to a malicious URL.
+       * - The user visits a web site that initiates a form submission or AJAX request on their behalf.
+       *
+       * In these cases, the request is technically sent from the user's browser, but
+       * the user is not in direct control of the URL or POST body.
+       *
+       * Headers are never considered third-party controllable by this predicate, although the
+       * third party does have some control over the the Referer and Origin headers.
+       */
+      predicate isThirdPartyControllable() {
+        this.getKind() = [parameterInputKind(), urlInputKind(), bodyInputKind()]
+      }
     }
 
     /** Provides a class for modeling new HTTP request inputs. */
@@ -321,6 +367,12 @@ module HTTP {
          * This is typically the name of the method that gives rise to this input.
          */
         abstract string getSourceType();
+
+        /**
+         * Gets the kind of the accessed input,
+         * Can be one of "parameter", "header", "body", "url", "cookie".
+         */
+        abstract RequestInputKind getKind();
       }
     }
 
@@ -387,6 +439,8 @@ module HTTP {
       RoutedParameter() { this.getParameter() = handler.getARoutedParameter() }
 
       override string getSourceType() { result = handler.getFramework() + " RoutedParameter" }
+
+      override RequestInputKind getKind() { result = parameterInputKind() }
     }
 
     /**
@@ -465,7 +519,7 @@ module HTTP {
        * Extend this class to model new APIs. If you want to refine existing API models,
        * extend `HttpResponse` instead.
        */
-      abstract class Range extends HTTP::Server::HttpResponse::Range {
+      abstract class Range extends Http::Server::HttpResponse::Range {
         /** Gets the data-flow node that specifies the location of this HTTP redirect response. */
         abstract DataFlow::Node getRedirectLocation();
       }
@@ -550,6 +604,9 @@ module HTTP {
   }
 }
 
+/** DEPRECATED: Alias for Http */
+deprecated module HTTP = Http;
+
 /**
  * A data flow node that executes an operating system command,
  * for instance by spawning a new process.
@@ -611,16 +668,12 @@ module CodeExecution {
  * Extend this class to refine existing API models. If you want to model new APIs,
  * extend `XmlParserCall::Range` instead.
  */
-class XmlParserCall extends DataFlow::Node {
-  XmlParserCall::Range range;
-
-  XmlParserCall() { this = range }
-
+class XmlParserCall extends DataFlow::Node instanceof XmlParserCall::Range {
   /** Gets the argument that specifies the XML content to be parsed. */
-  DataFlow::Node getInput() { result = range.getInput() }
+  DataFlow::Node getInput() { result = super.getInput() }
 
   /** Holds if this XML parser call is configured to process external entities */
-  predicate externalEntitiesEnabled() { range.externalEntitiesEnabled() }
+  predicate externalEntitiesEnabled() { super.externalEntitiesEnabled() }
 }
 
 /** Provides a class for modeling new XML parsing APIs. */
@@ -790,13 +843,9 @@ module CookieSecurityConfigurationSetting {
  * Extend this class to refine existing API models. If you want to model new APIs,
  * extend `Logging::Range` instead.
  */
-class Logging extends DataFlow::Node {
-  Logging::Range range;
-
-  Logging() { this = range }
-
+class Logging extends DataFlow::Node instanceof Logging::Range {
   /** Gets an input that is logged. */
-  DataFlow::Node getAnInput() { result = range.getAnInput() }
+  DataFlow::Node getAnInput() { result = super.getAnInput() }
 }
 
 /** Provides a class for modeling new logging mechanisms. */

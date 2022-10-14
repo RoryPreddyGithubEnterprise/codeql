@@ -1002,6 +1002,15 @@ module Decls {
       i = ast.getNumberOfParams()
     }
   }
+
+  /**
+   * The control-flow of an #if block.
+   * The active elements are already listed in the containing scope, so we can just flow through
+   * this as a leaf.
+   */
+  class IfConfigDeclTree extends AstLeafTree {
+    override IfConfigDecl ast;
+  }
 }
 
 module Exprs {
@@ -1065,7 +1074,7 @@ module Exprs {
 
     /**
      * The control-flow for assignments where the left-hand side has
-     * direct-to-implmentation-access semantics.
+     * direct-to-implementation-access semantics.
      */
     class PropertyAssignExpr extends AssignExprTree {
       AccessorDecl accessorDecl;

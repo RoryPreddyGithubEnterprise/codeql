@@ -112,7 +112,7 @@ module ClientRequest {
   /**
    * Gets the name of an HTTP request method, in all-lowercase.
    */
-  private string httpMethodName() { result = any(HTTP::RequestMethodName m).toLowerCase() }
+  private string httpMethodName() { result = any(Http::RequestMethodName m).toLowerCase() }
 
   /**
    * Gets a model of an instance of the `request` library, or one of
@@ -671,7 +671,7 @@ module ClientRequest {
     }
 
     /**
-     * Gets the response type corresponding to `getReponse()` but not
+     * Gets the response type corresponding to `getResponse()` but not
      * for explicitly typed calls like `getResponseJson()`.
      */
     string getAssignedResponseType() {

@@ -29,7 +29,6 @@ class SwiftDispatcher {
                                const swift::Pattern*,
                                const swift::TypeRepr*,
                                const swift::TypeBase*,
-                               const swift::IfConfigClause*,
                                FilePath>;
 
   template <typename E>
@@ -309,7 +308,7 @@ class SwiftDispatcher {
 
   static FilePath getFilePath(llvm::StringRef path) {
     // TODO: this needs more testing
-    // TODO: check canonicaliztion of names on a case insensitive filesystems
+    // TODO: check canonicalization of names on a case insensitive filesystems
     // TODO: make symlink resolution conditional on CODEQL_PRESERVE_SYMLINKS=true
     llvm::SmallString<PATH_MAX> realPath;
     if (std::error_code ec = llvm::sys::fs::real_path(path, realPath)) {
@@ -323,7 +322,6 @@ class SwiftDispatcher {
   // as we don't expect `nullptr` here. However `swift::ASTVisitor` and `swift::TypeVisitor` do not
   // accept const pointers
   virtual void visit(swift::Decl* decl) = 0;
-  virtual void visit(const swift::IfConfigClause* clause) = 0;
   virtual void visit(swift::Stmt* stmt) = 0;
   virtual void visit(const swift::StmtCondition* cond) = 0;
   virtual void visit(const swift::StmtConditionElement* cond) = 0;

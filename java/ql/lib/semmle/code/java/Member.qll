@@ -20,8 +20,14 @@ class Member extends Element, Annotatable, Modifiable, @member {
   /** Gets the type in which this member is declared. */
   RefType getDeclaringType() { declaresMember(result, this) }
 
-  /** Gets the qualified name of this member. */
-  string getQualifiedName() { result = this.getDeclaringType().getName() + "." + this.getName() }
+  /**
+   * Gets the qualified name of this member.
+   * This is useful for debugging, but for normal use `hasQualifiedName`
+   * is recommended, as it is more efficient.
+   */
+  string getQualifiedName() {
+    result = this.getDeclaringType().getQualifiedName() + "." + this.getName()
+  }
 
   /**
    * Holds if this member has the specified name and is declared in the
@@ -288,6 +294,48 @@ class Callable extends StmtParent, Member, @callable {
     constrs(this, _, result, _, _, _) or
     methods(this, _, result, _, _, _)
   }
+
+  /**
+   * Gets this callable's Kotlin proxy that supplies default parameter values, if one exists.
+   *
+   * For example, for the Kotlin declaration `fun f(x: Int, y: Int = 0, z: String = "1")`,
+   * this will get the synthetic proxy method that fills in the default values for `y` and `z`
+   * if not supplied, and to which the Kotlin extractor dispatches calls to `f` that are missing
+   * one or more parameter value. Similarly, constructors with one or more default parameter values
+   * have a corresponding constructor that fills in default values.
+   */
+  Callable getKotlinParameterDefaultsProxy() {
+    this.getDeclaringType() = result.getDeclaringType() and
+    exists(int proxyNParams, int extraLeadingParams, RefType lastParamType |
+      proxyNParams = result.getNumberOfParameters() and
+      extraLeadingParams = (proxyNParams - this.getNumberOfParameters()) - 2 and
+      extraLeadingParams >= 0 and
+      result.getParameterType(proxyNParams - 1) = lastParamType and
+      result.getParameterType(proxyNParams - 2).(PrimitiveType).hasName("int") and
+      (
+        this instanceof Constructor and
+        result instanceof Constructor and
+        extraLeadingParams = 0 and
+        lastParamType.hasQualifiedName("kotlin.jvm.internal", "DefaultConstructorMarker")
+        or
+        this instanceof Method and
+        result instanceof Method and
+        this.getName() + "$default" = result.getName() and
+        extraLeadingParams <= 2 and
+        lastParamType instanceof TypeObject
+      )
+    |
+      forall(int paramIdx | paramIdx in [extraLeadingParams .. proxyNParams - 3] |
+        this.getParameterType(paramIdx - extraLeadingParams).getErasure() =
+          eraseRaw(result.getParameterType(paramIdx))
+      )
+    )
+  }
+}
+
+/** Gets the erasure of `t1` if it is a raw type, or `t1` itself otherwise. */
+private Type eraseRaw(Type t1) {
+  if t1 instanceof RawType then result = t1.getErasure() else result = t1
 }
 
 /** Holds if method `m1` overrides method `m2`. */

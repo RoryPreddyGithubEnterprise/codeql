@@ -7,7 +7,6 @@ private import codeql.ruby.Concepts
 private import codeql.ruby.controlflow.CfgNodes
 private import codeql.ruby.DataFlow
 private import codeql.ruby.dataflow.RemoteFlowSources
-private import codeql.ruby.ast.internal.Module
 private import codeql.ruby.ApiGraphs
 
 private API::Node graphQlSchema() { result = API::getTopLevelMember("GraphQL").getMember("Schema") }
@@ -121,7 +120,7 @@ class GraphqlSchemaObjectClass extends ClassDeclaration {
  * `GraphQL::Schema::RelayClassicMutation` or
  * `GraphQL::Schema::Resolver`.
  *
- * Both of these classes have an overrideable `resolve` instance
+ * Both of these classes have an overridable `resolve` instance
  * method which can receive user input in order to resolve a query or mutation.
  */
 private class GraphqlResolvableClass extends ClassDeclaration {
@@ -145,7 +144,7 @@ private class GraphqlResolvableClass extends ClassDeclaration {
  *
  * ```rb
  * module Mutation
- *   class NameAnInstrument < BaseMutationn
+ *   class NameAnInstrument < BaseMutation
  *     argument :instrument_uuid, Types::Uuid,
  *              required: true,
  *              loads: ::Instrument,
@@ -164,7 +163,7 @@ private class GraphqlResolvableClass extends ClassDeclaration {
  * end
  * ```
  */
-class GraphqlResolveMethod extends Method, HTTP::Server::RequestHandler::Range {
+class GraphqlResolveMethod extends Method, Http::Server::RequestHandler::Range {
   private GraphqlResolvableClass resolvableClass;
 
   GraphqlResolveMethod() { this = resolvableClass.getMethod("resolve") }
@@ -189,7 +188,7 @@ class GraphqlResolveMethod extends Method, HTTP::Server::RequestHandler::Range {
  *
  * ```rb
  * module Mutation
- *   class NameAnInstrument < BaseMutationn
+ *   class NameAnInstrument < BaseMutation
  *     argument :instrument_uuid, Types::Uuid,
  *              required: true,
  *              loads: ::Instrument,
@@ -208,7 +207,7 @@ class GraphqlResolveMethod extends Method, HTTP::Server::RequestHandler::Range {
  * end
  * ```
  */
-class GraphqlLoadMethod extends Method, HTTP::Server::RequestHandler::Range {
+class GraphqlLoadMethod extends Method, Http::Server::RequestHandler::Range {
   private GraphqlResolvableClass resolvableClass;
 
   GraphqlLoadMethod() {
@@ -233,7 +232,7 @@ private class GraphqlSchemaObjectClassMethodCall extends MethodCall {
 
   GraphqlSchemaObjectClassMethodCall() {
     // e.g. Foo.some_method(...)
-    recvCls.getModule() = resolveConstantReadAccess(this.getReceiver())
+    recvCls.getModule() = this.getReceiver().(ConstantReadAccess).getModule()
     or
     // e.g. self.some_method(...) within a graphql Object or Interface
     this.getReceiver() instanceof SelfVariableAccess and
@@ -340,7 +339,7 @@ private class GraphqlFieldArgumentDefinitionMethodCall extends GraphqlSchemaObje
  * end
  * ```
  */
-class GraphqlFieldResolutionMethod extends Method, HTTP::Server::RequestHandler::Range {
+class GraphqlFieldResolutionMethod extends Method, Http::Server::RequestHandler::Range {
   private GraphqlSchemaObjectClass schemaObjectClass;
 
   GraphqlFieldResolutionMethod() {

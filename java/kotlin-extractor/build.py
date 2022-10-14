@@ -25,6 +25,8 @@ def parse_args():
                         dest='many', help='Build for a single version/kind')
     parser.add_argument('--single-version',
                         help='Build for a specific version/kind')
+    parser.add_argument('--single-version-embeddable', action='store_true',
+                        help='When building a single version, build an embeddable extractor (default is standalone)')
     return parser.parse_args()
 
 
@@ -86,7 +88,8 @@ def compile_to_dir(srcs, classpath, java_classpath, output):
     run_process([kotlinc,
                  # kotlinc can default to 256M, which isn't enough when we are extracting the build
                  '-J-Xmx2G',
-                 '-Xopt-in=kotlin.RequiresOptIn',
+                 '-Werror',
+                 '-opt-in=kotlin.RequiresOptIn',
                  '-d', output,
                  '-module-name', 'codeql-kotlin-extractor',
                  '-no-reflect', '-no-stdlib',
@@ -234,7 +237,13 @@ def compile_standalone(version):
 
 
 if args.single_version:
-    compile_standalone(args.single_version)
+    if args.single_version_embeddable == True:
+        compile_embeddable(args.single_version)
+    else:
+        compile_standalone(args.single_version)
+elif args.single_version_embeddable == True:
+    print("--single-version-embeddable requires --single-version", file=sys.stderr)
+    sys.exit(1)
 elif args.many:
     for version in kotlin_plugin_versions.many_versions:
         compile_standalone(version)
