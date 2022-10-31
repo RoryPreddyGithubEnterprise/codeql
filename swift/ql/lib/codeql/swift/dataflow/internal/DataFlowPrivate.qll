@@ -148,6 +148,11 @@ private module Cached {
     // flow through `!`
     nodeFrom.asExpr() = nodeTo.asExpr().(ForceValueExpr).getSubExpr()
     or
+    // flow through `?`
+    nodeFrom.asExpr() = nodeTo.asExpr().(BindOptionalExpr).getSubExpr()
+    or
+    nodeFrom.asExpr() = nodeTo.asExpr().(OptionalEvaluationExpr).getSubExpr()
+    or
     // flow through a flow summary (extension of `SummaryModelCsv`)
     FlowSummaryImpl::Private::Steps::summaryLocalStep(nodeFrom, nodeTo, true)
   }
@@ -264,7 +269,7 @@ class SummaryNode extends NodeImpl, TSummaryNode {
 
   SummaryNode() { this = TSummaryNode(c, state) }
 
-  override DataFlowCallable getEnclosingCallable() { result = TDataFlowFunc(c) }
+  override DataFlowCallable getEnclosingCallable() { result.asSummarizedCallable() = c }
 
   override UnknownLocation getLocationImpl() { any() }
 
@@ -425,6 +430,8 @@ private module OutNodes {
   }
 
   class SummaryOutNode extends OutNode, SummaryNode {
+    SummaryOutNode() { FlowSummaryImpl::Private::summaryOutNode(_, this, _) }
+
     override DataFlowCall getCall(ReturnKind kind) {
       FlowSummaryImpl::Private::summaryOutNode(result, this, kind)
     }
